@@ -25,8 +25,13 @@ function monthKey(value) { return isoDate(monthStart(value)).slice(0, 7); }
 function money(value) { return Number(value || 0).toFixed(2); }
 
 function latestUpdate(updates, loanId, dateStr) {
+  // Updates are monthly settings: an update dated anywhere in a month is
+  // effective from that month. This means an October 15 update affects the
+  // October projection, not November. If several updates exist in the same
+  // month, the latest dated one wins.
+  const currentMonth = dateStr.slice(0, 7);
   return updates
-    .filter((item) => item.loan_id === loanId && String(item.update_date).slice(0, 10) <= dateStr)
+    .filter((item) => item.loan_id === loanId && String(item.update_date).slice(0, 7) <= currentMonth)
     .sort((a, b) => String(a.update_date).localeCompare(String(b.update_date))).at(-1) || null;
 }
 

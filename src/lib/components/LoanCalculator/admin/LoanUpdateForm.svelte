@@ -90,7 +90,7 @@
           min="0"
           step="0.01"
           disabled={isSubmitting}
-          placeholder="Enter new payment amount" />
+          placeholder="Enter new monthly amortization" />
       </div>
 
       <div class="form-group">
@@ -108,13 +108,14 @@
       </div>
 
       <div class="form-group">
-        <label for="updateDate">Effective Date:</label>
+        <label for="updateDate">Effective Date / Month:</label>
         <input
           type="date"
           id="updateDate"
           bind:value={formData.updateDate}
           required
           disabled={isSubmitting} />
+        <small class="field-help">The month you select is the month the new rate/amortization starts.</small>
       </div>
     </div>
 
@@ -224,6 +225,13 @@
     color: var(--color-text-muted, #999);
   }
 
+  .field-help {
+    margin-top: 0.35rem;
+    color: var(--color-text-muted, #777);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
   .form-actions {
     display: flex;
     gap: 0.75rem;
@@ -275,7 +283,14 @@
       gap: 0.75rem;
     }
 
-    .form-actions {
+    .field-help {
+    margin-top: 0.35rem;
+    color: var(--color-text-muted, #777);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .form-actions {
       flex-direction: column;
     }
 

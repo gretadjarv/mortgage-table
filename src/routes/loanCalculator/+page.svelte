@@ -55,30 +55,14 @@
     const projectedRate = latestProjectionRow?.rates?.[index];
     const projectedAmortization = latestProjectionRow?.recurringAmortizations?.[index];
     const projectedMonthlyCost = latestProjectionRow?.monthlyCosts?.[index];
-    const latestAdjustment = [...$balanceAdjustments]
-      .filter((item) => item.loan_id === loan.id && String(item.adjustment_date).slice(0, 10) <= todayString)
-      .sort((a, b) => String(a.adjustment_date).localeCompare(String(b.adjustment_date)))
-      .at(-1);
 
-    // A balance adjustment is an actual balance at an exact date. For the
-    // overview, start from that actual figure and apply only payments that
-    // happened after it. This prevents a September 13 balance from being
-    // incorrectly reduced by the whole September projection before September
-    // 13 has even happened.
-    let balance;
-    if (latestAdjustment) {
-      balance = Number(latestAdjustment.balance) || 0;
-      const adjustmentDate = String(latestAdjustment.adjustment_date).slice(0, 10);
-      balance -= $oneTimePayments
-        .filter((payment) => payment.loan_id === loan.id)
-        .filter((payment) => String(payment.payment_date).slice(0, 10) > adjustmentDate && String(payment.payment_date).slice(0, 10) <= todayString)
-        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-      balance = Math.max(0, balance);
-    } else if (Number.isFinite(Number(projectedBalance))) {
-      balance = Number(projectedBalance);
-    } else {
-      balance = Number(loan.start_sum || 0);
-    }
+    // The projection is the single source of truth for the overview balance.
+    // Balance adjustments are absolute balances, so projectLoans applies the
+    // latest adjustment before that month's regular amortization/payment.
+    // This keeps the card, total and projection table consistent.
+    const balance = Number.isFinite(Number(projectedBalance))
+      ? Number(projectedBalance)
+      : Number(loan.start_sum || 0);
 
     return {
       loan,
