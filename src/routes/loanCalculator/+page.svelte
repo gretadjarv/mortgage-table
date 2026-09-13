@@ -24,7 +24,10 @@
 
   $: currentRow = loanData.find((row) => row.current) || loanData[loanData.length - 1];
   $: initialBalance = $loans.reduce((sum, loan) => sum + Number(loan.start_sum || 0), 0);
+  // The dashboard balance represents the projected balance after the current
+  // month's scheduled amortization and one-time payments.
   $: currentBalance = currentRow?.totalRemainingBalance ?? initialBalance;
+  $: balanceMonth = currentRow?.monthYear || 'current projection';
   $: paidOff = Math.max(0, initialBalance - currentBalance);
   $: progress = initialBalance > 0 ? Math.min(100, Math.max(0, paidOff / initialBalance * 100)) : 0;
   $: weightedInterest = currentRow && currentBalance > 0
@@ -131,6 +134,7 @@
       <div class="progress-head"><span>Debt progress</span><strong>{money(paidOff)} paid off</strong></div>
       <div class="progress-track"><div class="progress-fill" style={`width:${progress}%`}></div></div>
       <div class="progress-labels"><span>{money(initialBalance)} starting balance</span><span>{progress.toFixed(1)}%</span></div>
+      <div class="balance-note">Balance shown above is the projected balance after this month's scheduled payments. One-time payments and historical balance corrections are included.</div>
     </section>
 
     <section class="section">
@@ -138,6 +142,7 @@
         <div><div class="eyebrow">CURRENT LOANS</div><h2>Loan overview</h2></div>
         <span class="count">{$loans.length} loans</span>
       </div>
+      <div class="snowball-note"><strong>Automatic amortization rollover</strong><span>When a loan is paid off, its regular monthly amortization moves to the next active loan. To override the rollover, add a payment/rate update dated in that month for the receiving loan.</span></div>
       <div class="loan-grid">
         {#each currentLoans as item}
           <article class="loan-card">
@@ -147,6 +152,7 @@
               <div><span>Monthly cost</span><b>{money(item.monthlyCost)}</b></div>
               <div><span>Amortization</span><b>{money(item.amortization)}</b></div>
             </div>
+            {#if item.loan.amortization > 0}<div class="auto-label">Automatic rollover enabled</div>{/if}
           </article>
         {/each}
       </div>
@@ -192,6 +198,10 @@
   .progress-track { height:10px; border-radius:99px; background:#eef2f7; overflow:hidden; margin:.7rem 0 .4rem; }
   .progress-fill { height:100%; background:#608d87; border-radius:99px; }
   .progress-labels { color:#94a3b8; font-size:.72rem; }
+  .balance-note { margin-top:.75rem; color:#94a3b8; font-size:.72rem; }
+  .snowball-note { display:flex; gap:.75rem; align-items:flex-start; padding:.85rem 1rem; margin-bottom:1rem; background:#f7faf9; border:1px solid #dfe9e6; border-radius:12px; color:#52616d; font-size:.8rem; }
+  .snowball-note strong { color:#334155; white-space:nowrap; }
+  .auto-label { margin-top:.75rem; color:#608d87; font-size:.7rem; font-weight:700; }
   .section { padding:1.4rem; }
   .section-heading { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin-bottom:1rem; }
   h2 { margin:0; color:#172033; font-size:1.45rem; letter-spacing:-.025em; }

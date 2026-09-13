@@ -17,6 +17,7 @@
         <th>Total cost</th>
         <th>Interest</th>
         <th>Amortization</th>
+        <th>Auto-roll</th>
         <th>One-time</th>
         <th>Total balance</th>
       </tr>
@@ -29,6 +30,7 @@
           <td><strong>{money(row.total)}</strong></td>
           <td>{money(row.totalInterest)}</td>
           <td>{money(row.totalAmortization)}</td>
+          <td>{row.rolloverAmounts?.some((value) => Number(value) > 0) ? '↳ rollover' : '—'}</td>
           <td>{money(row.totalOneTimePayments)}</td>
           <td><strong>{money(row.totalRemainingBalance)}</strong></td>
         </tr>
@@ -39,7 +41,7 @@
 
 <style lang="scss">
   .table-wrap { overflow-x: auto; margin: 20px 0; }
-  table { width: 100%; min-width: 1050px; border-collapse: collapse; background: #fff; }
+  table { width: 100%; min-width: 1120px; border-collapse: collapse; background: #fff; }
   th, td { border: 1px solid var(--color-border); padding: 9px; text-align: right; font-size: 14px; white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: inherit; z-index: 1; }
   th { background: var(--color-secondary); color: #000; }
