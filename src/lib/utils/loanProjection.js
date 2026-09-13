@@ -39,13 +39,15 @@ function latestBalanceAdjustment(adjustments, loanId, dateStr) {
 /**
  * Projects loans month-by-month.
  *
- * By default, amortization uses a simple snowball: when a loan reaches zero,
- * its scheduled monthly amortization is added to the next active loan.
+ * By default, when a loan reaches zero its normal monthly amortization is
+ * released and continues on the next loan in the list that still has a balance.
+ * The receiving loan keeps its own normal amortization, so the released amount
+ * is added rather than replacing it.
  *
- * A manual loan update on a month is an explicit override. This means the user
- * can always stop/reduce/increase the automatic rollover by adding an update
- * for the receiving loan on that date. The row exposes both scheduled and
- * effective amortization so the behavior stays visible.
+ * A manual loan update on the receiving loan in that month is an explicit
+ * override: its entered amortization is used instead of the automatic rollover.
+ * The row exposes scheduled, rollover and effective amounts so the behavior is
+ * visible.
  */
 export function projectLoans({
   loans = [],
@@ -169,8 +171,10 @@ export function projectLoans({
       let rollover = 0;
       let effectiveAmortization = scheduled;
 
-      // Automatic rollover is applied to the first active loan after a paid-off
-      // loan. A manual update on this receiving loan overrides the rollover.
+      // Automatic rollover is applied to the next active loan in list order.
+      // Because a loan can only be processed once per month, a payoff releases
+      // its amortization for the next month's projection. The receiving loan's
+      // own scheduled amortization remains in place.
       if (snowball && rolloverPool > 0 && !hasManualUpdate) {
         rollover = rolloverPool;
         effectiveAmortization += rollover;

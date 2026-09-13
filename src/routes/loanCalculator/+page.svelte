@@ -38,13 +38,19 @@
   $: monthlyCost = Number(currentRow?.total || 0);
   $: projectedPayoff = loanData.find((row) => Number(row.totalRemainingBalance) <= 0.01)?.monthYear || '—';
   $: historicalRows = loanData.filter((row) => row.historical);
+  // The overview must always reflect the latest calculated balance for each
+  // individual loan, not the original start_sum. Use the current projection
+  // row (which includes balance corrections, one-time payments and monthly
+  // amortization) and fall back to the most recent row if the current month
+  // isn't present.
+  $: latestProjectionRow = currentRow || loanData[loanData.length - 1];
   $: currentLoans = $loans.map((loan, index) => ({
     loan,
     index,
-    balance: Number(currentRow?.remainingBalances?.[index] ?? loan.start_sum ?? 0),
-    rate: Number(currentRow?.rates?.[index] ?? loan.interest_rate ?? 0),
-    amortization: Number(currentRow?.amortizations?.[index] ?? loan.amortization ?? 0),
-    monthlyCost: Number(currentRow?.payments?.[index] ?? 0)
+    balance: Number(latestProjectionRow?.remainingBalances?.[index] ?? loan.start_sum ?? 0),
+    rate: Number(latestProjectionRow?.rates?.[index] ?? loan.interest_rate ?? 0),
+    amortization: Number(latestProjectionRow?.amortizations?.[index] ?? loan.amortization ?? 0),
+    monthlyCost: Number(latestProjectionRow?.payments?.[index] ?? 0)
   }));
 
   async function load() {
@@ -142,7 +148,7 @@
         <div><div class="eyebrow">CURRENT LOANS</div><h2>Loan overview</h2></div>
         <span class="count">{$loans.length} loans</span>
       </div>
-      <div class="snowball-note"><strong>Automatic amortization rollover</strong><span>When a loan is paid off, its regular monthly amortization moves to the next active loan. To override the rollover, add a payment/rate update dated in that month for the receiving loan.</span></div>
+      <div class="snowball-note"><strong>Automatic amortization rollover</strong><span>When a loan is paid off, the same monthly amortization amount continues on the next loan that still has a balance. The receiving loan keeps its own amortization too. Add a payment/rate update for that month if you want to override the automatic amount.</span></div>
       <div class="loan-grid">
         {#each currentLoans as item}
           <article class="loan-card">
