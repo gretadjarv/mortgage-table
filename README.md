@@ -1,63 +1,30 @@
 # Mortgage Table
 
-A static SvelteKit mortgage tracker designed for GitHub Pages and Supabase.
+A SvelteKit mortgage tracker deployed to GitHub Pages with Supabase.
 
-## 1. Create Supabase project
+## Features
 
-Create a project in Supabase, open **SQL Editor**, and run `supabase.sql`.
+- Multiple loans with names, starting balance, interest rate, amortization and start date
+- Monthly projection for up to 50 years
+- Monthly cost split into interest and amortization
+- Remaining balance per loan and total balance
+- Historical payment/rate changes
+- One-time amortization payments
+- Historical absolute balance adjustments for loan transfers/refinancing/bank corrections
+- Edit/delete support for loans and historical events
+- Supabase authentication and row-level security
 
-Authentication uses Supabase email/password.
+## Supabase
 
-## 2. Configure local development
+Run the SQL in `supabase.sql`. If the original three tables already exist, only the final `loan_balance_adjustments` section needs to be added.
 
-Copy `.env.example` to `.env` and add your Supabase project URL and publishable/anon key.
-
-```text
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_KEY
-```
-
-Then:
-
-```bash
-npm install
-npm run dev
-```
-
-## 3. Put it on GitHub
-
-Create a repository named exactly:
-
-`mortgage-table`
-
-Push the contents of this folder to the `main` branch.
-
-The included GitHub Action builds the app and deploys it to GitHub Pages. The repository name is already used as the base path:
-
-`https://YOUR-USERNAME.github.io/mortgage-table/`
-
-## 4. Add GitHub secrets
-
-In **Settings → Secrets and variables → Actions**, create:
+Set GitHub Actions secrets:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Use the public Supabase project URL and publishable/anon key. **Never use the service-role key in this frontend.**
+## Historical balance adjustment
 
-## 5. Enable Pages
+Use **Set Historical Balance** inside a loan's Updates panel when the actual balance becomes a known amount on a specific date. Example: if a loan is transferred on 2026-01-15 and the new bank says the balance is 366,097 SEK, save 366,097 with that date. The projection then uses that balance from that point onward while keeping the normal interest/amortization calculations.
 
-Go to **Settings → Pages** and choose **GitHub Actions** as the build/deployment source.
-
-A push to `main` will run `.github/workflows/deploy.yml`.
-
-## Features
-
-- Supabase email/password authentication
-- Private per-user loan data with Row Level Security
-- Add/edit/delete loans
-- Interest-rate and amortization history
-- One-time payments
-- Debt projection chart
-- GitHub Pages deployment
-- No backend server required
+For an adjustment that represents the balance *after* a month's payment, use the following month's date (or otherwise choose the date carefully) so the simulator does not amortize the same period twice.

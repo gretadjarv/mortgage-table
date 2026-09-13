@@ -1,14 +1,12 @@
 import adapter from '@sveltejs/adapter-static';
-
-const base = process.env.BASE_PATH || '';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 const config = {
+  preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter({
-      fallback: 'index.html'
-    }),
+    adapter: adapter({ fallback: '404.html' }),
     paths: {
-      base
+      base: process.env.BASE_PATH || ''
     }
   }
 };
