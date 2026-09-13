@@ -102,6 +102,8 @@ export function projectLoans({
     const rolloverAmounts = [];
     const balanceAdjustmentsApplied = [];
     const amortizationOverrides = [];
+    const effectiveAmortizations = [];
+    const monthlyCosts = [];
 
     for (let index = 0; index < states.length; index += 1) {
       const state = states[index];
@@ -132,6 +134,8 @@ export function projectLoans({
         scheduledAmortizations.push(0);
         rolloverAmounts.push(0);
         amortizationOverrides.push(false);
+        effectiveAmortizations.push(0);
+        monthlyCosts.push(0);
         continue;
       }
 
@@ -156,6 +160,8 @@ export function projectLoans({
         scheduledAmortizations.push(0);
         rolloverAmounts.push(0);
         amortizationOverrides.push(hasManualUpdate);
+        effectiveAmortizations.push(0);
+        monthlyCosts.push(0);
         state.paidOff = true;
 
         // Release this loan's normal monthly amortization once, so it can be
@@ -171,10 +177,9 @@ export function projectLoans({
       let rollover = 0;
       let effectiveAmortization = scheduled;
 
-      // Automatic rollover is applied to the next active loan in list order.
-      // Because a loan can only be processed once per month, a payoff releases
-      // its amortization for the next month's projection. The receiving loan's
-      // own scheduled amortization remains in place.
+      // A paid-off loan releases its normal monthly amortization. From the
+      // following month, that exact amount is added to the next active loan.
+      // The receiving loan keeps its own scheduled amortization.
       if (snowball && rolloverPool > 0 && !hasManualUpdate) {
         rollover = rolloverPool;
         effectiveAmortization += rollover;
@@ -193,6 +198,8 @@ export function projectLoans({
       scheduledAmortizations.push(scheduled);
       rolloverAmounts.push(rollover);
       amortizationOverrides.push(hasManualUpdate);
+      effectiveAmortizations.push(principal);
+      monthlyCosts.push(payment);
 
       state.balance = Math.max(0, balanceBefore - principal);
       balancesAfterPayment.push(state.balance);
@@ -221,6 +228,8 @@ export function projectLoans({
       scheduledAmortizations,
       rolloverAmounts,
       amortizationOverrides,
+      effectiveAmortizations,
+      monthlyCosts,
       balanceAdjustmentsApplied,
       totalRemainingBalance: balancesAfterPayment.reduce((sum, balance) => sum + balance, 0),
       historical: monthDate < todayMonth,

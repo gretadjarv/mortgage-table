@@ -30,7 +30,7 @@
           <td><strong>{money(row.total)}</strong></td>
           <td>{money(row.totalInterest)}</td>
           <td>{money(row.totalAmortization)}</td>
-          <td>{row.rolloverAmounts?.some((value) => Number(value) > 0) ? '↳ rollover' : '—'}</td>
+          <td>{row.rolloverAmounts?.some((value) => Number(value) > 0) ? `↳ ${money(row.rolloverAmounts.reduce((a, b) => a + Number(b || 0), 0))}` : '—'}</td>
           <td>{money(row.totalOneTimePayments)}</td>
           <td><strong>{money(row.totalRemainingBalance)}</strong></td>
         </tr>

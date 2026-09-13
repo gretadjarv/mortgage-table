@@ -49,8 +49,8 @@
     index,
     balance: Number(latestProjectionRow?.remainingBalances?.[index] ?? loan.start_sum ?? 0),
     rate: Number(latestProjectionRow?.rates?.[index] ?? loan.interest_rate ?? 0),
-    amortization: Number(latestProjectionRow?.amortizations?.[index] ?? loan.amortization ?? 0),
-    monthlyCost: Number(latestProjectionRow?.payments?.[index] ?? 0)
+    amortization: Number(latestProjectionRow?.effectiveAmortizations?.[index] ?? loan.amortization ?? 0),
+    monthlyCost: Number(latestProjectionRow?.monthlyCosts?.[index] ?? latestProjectionRow?.payments?.[index] ?? 0)
   }));
 
   async function load() {
@@ -140,7 +140,7 @@
       <div class="progress-head"><span>Debt progress</span><strong>{money(paidOff)} paid off</strong></div>
       <div class="progress-track"><div class="progress-fill" style={`width:${progress}%`}></div></div>
       <div class="progress-labels"><span>{money(initialBalance)} starting balance</span><span>{progress.toFixed(1)}%</span></div>
-      <div class="balance-note">Balance shown above is the projected balance after this month's scheduled payments. One-time payments and historical balance corrections are included.</div>
+      <div class="balance-note">Balances are recalculated from your latest historical balance, regular amortization and one-time payments. The loan cards show the latest projected balance after the current month's payments.</div>
     </section>
 
     <section class="section">

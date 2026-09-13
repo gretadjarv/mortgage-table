@@ -30,6 +30,25 @@ async function reloadLoans() {
   return data || [];
 }
 
+async function reloadRelatedData() {
+  const [updatesRes, paymentsRes, balancesRes] = await Promise.all([
+    supabase.from('loan_updates').select('*').order('update_date', { ascending: true }),
+    supabase.from('one_time_payments').select('*').order('payment_date', { ascending: true }),
+    supabase.from('loan_balance_adjustments').select('*').order('adjustment_date', { ascending: true })
+  ]);
+  if (updatesRes.error) throw updatesRes.error;
+  if (paymentsRes.error) throw paymentsRes.error;
+  if (balancesRes.error) throw balancesRes.error;
+  loanUpdates.set(updatesRes.data || []);
+  oneTimePayments.set(paymentsRes.data || []);
+  balanceAdjustments.set(balancesRes.data || []);
+  return {
+    updates: updatesRes.data || [],
+    payments: paymentsRes.data || [],
+    balances: balancesRes.data || []
+  };
+}
+
 export const loanService = {
   async fetchAllLoans() {
     isLoading.set(true);
@@ -130,7 +149,7 @@ export const loanUpdateService = {
       update_date: updateData.updateDate
     });
     if (error) throw error;
-    await this.fetchLoanUpdates(loanId);
+    await reloadRelatedData();
     showNotification('Payment/rate update added!', 'success');
     return true;
   },
@@ -142,7 +161,7 @@ export const loanUpdateService = {
       update_date: updateData.updateDate
     }).eq('id', updateId).eq('loan_id', loanId).eq('user_id', user.id);
     if (error) throw error;
-    await this.fetchLoanUpdates(loanId);
+    await reloadRelatedData();
     showNotification('Payment/rate update edited!', 'success');
     return true;
   },
@@ -150,18 +169,18 @@ export const loanUpdateService = {
     const user = await currentUser();
     const { error } = await supabase.from('loan_updates').delete().eq('id', updateId).eq('loan_id', loanId).eq('user_id', user.id);
     if (error) throw error;
-    await this.fetchLoanUpdates(loanId);
+    await reloadRelatedData();
     showNotification('Payment/rate update deleted!', 'success');
     return true;
   }
 };
 
 export const oneTimePaymentService = {
-  async fetchOneTimePayments(loanId) {
-    const { data, error } = await supabase.from('one_time_payments').select('*').eq('loan_id', loanId).order('payment_date', { ascending: true });
+  async fetchOneTimePayments(loanId = null) {
+    const { data, error } = await supabase.from('one_time_payments').select('*').order('payment_date', { ascending: true });
     if (error) throw error;
     oneTimePayments.set(data || []);
-    return data || [];
+    return loanId ? (data || []).filter((item) => item.loan_id === loanId) : (data || []);
   },
   async createOneTimePayment(loanId, paymentData) {
     const user = await currentUser();
@@ -172,7 +191,7 @@ export const oneTimePaymentService = {
       payment_date: paymentData.paymentDate
     });
     if (error) throw error;
-    await this.fetchOneTimePayments(loanId);
+    await reloadRelatedData();
     showNotification('One-time payment added!', 'success');
     return true;
   },
@@ -180,18 +199,18 @@ export const oneTimePaymentService = {
     const user = await currentUser();
     const { error } = await supabase.from('one_time_payments').delete().eq('id', paymentId).eq('loan_id', loanId).eq('user_id', user.id);
     if (error) throw error;
-    await this.fetchOneTimePayments(loanId);
+    await reloadRelatedData();
     showNotification('One-time payment deleted!', 'success');
     return true;
   }
 };
 
 export const balanceAdjustmentService = {
-  async fetchBalanceAdjustments(loanId) {
-    const { data, error } = await supabase.from('loan_balance_adjustments').select('*').eq('loan_id', loanId).order('adjustment_date', { ascending: true });
+  async fetchBalanceAdjustments(loanId = null) {
+    const { data, error } = await supabase.from('loan_balance_adjustments').select('*').order('adjustment_date', { ascending: true });
     if (error) throw error;
     balanceAdjustments.set(data || []);
-    return data || [];
+    return loanId ? (data || []).filter((item) => item.loan_id === loanId) : (data || []);
   },
   async createBalanceAdjustment(loanId, adjustmentData) {
     const user = await currentUser();
@@ -203,7 +222,7 @@ export const balanceAdjustmentService = {
       note: adjustmentData.note?.trim() || null
     });
     if (error) throw error;
-    await this.fetchBalanceAdjustments(loanId);
+    await reloadRelatedData();
     showNotification('Historical balance saved!', 'success');
     return true;
   },
@@ -215,7 +234,7 @@ export const balanceAdjustmentService = {
       note: adjustmentData.note?.trim() || null
     }).eq('id', adjustmentId).eq('loan_id', loanId).eq('user_id', user.id);
     if (error) throw error;
-    await this.fetchBalanceAdjustments(loanId);
+    await reloadRelatedData();
     showNotification('Historical balance updated!', 'success');
     return true;
   },
@@ -223,7 +242,7 @@ export const balanceAdjustmentService = {
     const user = await currentUser();
     const { error } = await supabase.from('loan_balance_adjustments').delete().eq('id', adjustmentId).eq('loan_id', loanId).eq('user_id', user.id);
     if (error) throw error;
-    await this.fetchBalanceAdjustments(loanId);
+    await reloadRelatedData();
     showNotification('Historical balance deleted!', 'success');
     return true;
   }
