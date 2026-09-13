@@ -24,20 +24,36 @@ function monthStart(value) {
 function monthKey(value) { return isoDate(monthStart(value)).slice(0, 7); }
 function money(value) { return Number(value || 0).toFixed(2); }
 
-function latestUpdate(updates, loanId, dateStr) {
-  // Updates are monthly settings: an update dated anywhere in a month is
-  // effective from that month. This means an October 15 update affects the
-  // October projection, not November. If several updates exist in the same
-  // month, the latest dated one wins.
-  const currentMonth = dateStr.slice(0, 7);
+// The original calculator projects by calendar MONTH, using the first day
+// of each month as the calculation date. Keep that convention so historical
+// totals remain identical to the original app: an event dated after the first
+// of a month affects the following month's projection. An event dated on the
+// first day affects that month.
+function effectiveMonthStart(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+  const first = monthStart(date);
+  if (date.getUTCDate() > 1) return addMonths(first, 1);
+  return first;
+}
+
+function latestUpdate(updates, loanId, monthDate) {
   return updates
-    .filter((item) => item.loan_id === loanId && String(item.update_date).slice(0, 7) <= currentMonth)
+    .filter((item) => {
+      if (item.loan_id !== loanId) return false;
+      const effective = effectiveMonthStart(item.update_date);
+      return effective && effective.getTime() <= monthDate.getTime();
+    })
     .sort((a, b) => String(a.update_date).localeCompare(String(b.update_date))).at(-1) || null;
 }
 
-function latestBalanceAdjustment(adjustments, loanId, dateStr) {
+function latestBalanceAdjustment(adjustments, loanId, monthDate) {
   return adjustments
-    .filter((item) => item.loan_id === loanId && String(item.adjustment_date).slice(0, 10) <= dateStr)
+    .filter((item) => {
+      if (item.loan_id !== loanId) return false;
+      const effective = effectiveMonthStart(item.adjustment_date);
+      return effective && effective.getTime() <= monthDate.getTime();
+    })
     .sort((a, b) => String(a.adjustment_date).localeCompare(String(b.adjustment_date))).at(-1) || null;
 }
 
@@ -153,16 +169,17 @@ export function projectLoans({
     for (let index = 0; index < states.length; index += 1) {
       const state = states[index];
       const loanId = state.loan.id;
-      const update = latestUpdate(updates, loanId, dateStr);
-      const hasManualUpdate = !!update && String(update.update_date).slice(0, 7) === monthKeyValue;
+      const update = latestUpdate(updates, loanId, monthDate);
+      const effectiveUpdateMonth = update ? effectiveMonthStart(update.update_date) : null;
+      const hasManualUpdate = !!effectiveUpdateMonth && effectiveUpdateMonth.getTime() === monthDate.getTime();
 
       if (update) {
         state.amortization = Number(update.updated_amortization) || 0;
         state.rate = Number(update.updated_interest_rate) || 0;
       }
 
-      const adjustment = latestBalanceAdjustment(balanceAdjustments, loanId, dateStr);
-      if (adjustment && adjustment.adjustment_date !== state.lastAdjustmentDate) {
+      const adjustment = latestBalanceAdjustment(balanceAdjustments, loanId, monthDate);
+      if (adjustment && String(adjustment.adjustment_date) !== state.lastAdjustmentDate) {
         state.balance = Math.max(0, Number(adjustment.balance) || 0);
         state.lastAdjustmentDate = adjustment.adjustment_date;
         if (state.balance > 0) state.paidOff = false;
