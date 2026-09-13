@@ -3,18 +3,16 @@
   import LoanChart from '$lib/components/LoanCalculator/LoanChart.svelte';
   import LoanSumsChart from '$lib/components/LoanCalculator/LoanSumsChart.svelte';
   import Table from '$lib/components/LoanCalculator/LoanProjectionTable.svelte';
-  import { loans, loanUpdates, oneTimePayments, balanceAdjustments, loanActions } from '$lib/stores/loanStore';
+  import { loans, loanUpdates, oneTimePayments, balanceAdjustments, loanActions, formatCurrency } from '$lib/stores/loanStore';
   import { projectLoans } from '$lib/utils/loanProjection.js';
   import { supabase } from '$lib/supabase.js';
 
   let isLoading = true;
   let authenticated = false;
   let error = null;
-  let loanData = [];
+  let showHistory = false;
 
-  const today = new Date();
-  const year = today.getFullYear();
-  const monthName = today.toLocaleDateString('en-US', { month: 'long' });
+  const money = (value) => formatCurrency(Math.round(Number(value) || 0));
 
   $: loanData = projectLoans({
     loans: $loans,
@@ -23,11 +21,28 @@
     balanceAdjustments: $balanceAdjustments,
     years: 50
   });
+
+  $: currentRow = loanData.find((row) => row.current) || loanData[loanData.length - 1];
   $: initialBalance = $loans.reduce((sum, loan) => sum + Number(loan.start_sum || 0), 0);
-  $: currentRow = loanData.find((row) => row.current) || loanData[0];
   $: currentBalance = currentRow?.totalRemainingBalance ?? initialBalance;
   $: paidOff = Math.max(0, initialBalance - currentBalance);
-  $: percentageWidth = initialBalance > 0 ? Math.min(100, (currentBalance / initialBalance) * 100) : 0;
+  $: progress = initialBalance > 0 ? Math.min(100, Math.max(0, paidOff / initialBalance * 100)) : 0;
+  $: weightedInterest = currentRow && currentBalance > 0
+    ? currentRow.rates.reduce((sum, rate, i) => sum + Number(rate || 0) * Number(currentRow.balancesBeforePayment[i] || 0), 0) / Math.max(currentRow.balancesBeforePayment.reduce((a,b) => a + Number(b || 0), 0), 1)
+    : 0;
+  $: monthlyInterest = Number(currentRow?.totalInterest || 0);
+  $: monthlyAmortization = Number(currentRow?.totalAmortization || 0);
+  $: monthlyCost = Number(currentRow?.total || 0);
+  $: projectedPayoff = loanData.find((row) => Number(row.totalRemainingBalance) <= 0.01)?.monthYear || '—';
+  $: historicalRows = loanData.filter((row) => row.historical);
+  $: currentLoans = $loans.map((loan, index) => ({
+    loan,
+    index,
+    balance: Number(currentRow?.remainingBalances?.[index] ?? loan.start_sum ?? 0),
+    rate: Number(currentRow?.rates?.[index] ?? loan.interest_rate ?? 0),
+    amortization: Number(currentRow?.amortizations?.[index] ?? loan.amortization ?? 0),
+    monthlyCost: Number(currentRow?.payments?.[index] ?? 0)
+  }));
 
   async function load() {
     if (!supabase) { error = 'Supabase is not configured.'; isLoading = false; return; }
@@ -57,39 +72,146 @@
   onMount(load);
 </script>
 
-<svelte:head><title>Loan Calculator</title><meta name="description" content="Historical and projected mortgage costs" /></svelte:head>
+<svelte:head>
+  <title>Mortgage Dashboard</title>
+  <meta name="description" content="Mortgage dashboard with historical data and projected monthly costs" />
+</svelte:head>
 
 {#if isLoading}
-  <p>Loading loan data...</p>
+  <div class="loading">Loading your mortgage dashboard…</div>
 {:else if error}
-  <p class="error">{error}</p>
+  <div class="error-panel">{error}</div>
 {:else if !authenticated}
-  <section><p>Please sign in from the Overview page first.</p></section>
+  <div class="empty-state">Please sign in from the Overview page first.</div>
 {:else}
-  <section>
-    <h1>Loan Calculator</h1>
-    <div class="summary">
-      <p><strong>Starting loan:</strong> {Math.round(initialBalance).toLocaleString('sv-SE')} kr</p>
-      <p><strong>Paid off:</strong> {Math.round(paidOff).toLocaleString('sv-SE')} kr</p>
-      <p><strong>Current/projected balance:</strong> {Math.round(currentBalance).toLocaleString('sv-SE')} kr</p>
+  <div class="dashboard">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">MORTGAGE DASHBOARD</div>
+        <h1>Your mortgage at a glance</h1>
+        <p>Historical figures and a month-by-month projection based on your actual loan changes.</p>
+      </div>
+      <a class="manage" href="/mortgage-table/loanCalculator/admin">Manage loans →</a>
     </div>
-    <div class="progress"><div class="progress-bar" style={`width: ${percentageWidth}%;`}></div></div>
+
+    <div class="metric-grid">
+      <article class="metric featured">
+        <span>Total balance</span>
+        <strong>{money(currentBalance)}</strong>
+        <small>{progress.toFixed(1)}% paid off from starting balance</small>
+      </article>
+      <article class="metric">
+        <span>Weighted interest</span>
+        <strong>{weightedInterest.toFixed(2)}%</strong>
+        <small>Balance weighted</small>
+      </article>
+      <article class="metric">
+        <span>Monthly interest</span>
+        <strong>{money(monthlyInterest)}</strong>
+        <small>Current projection</small>
+      </article>
+      <article class="metric">
+        <span>Monthly amortization</span>
+        <strong>{money(monthlyAmortization)}</strong>
+        <small>Principal paid</small>
+      </article>
+      <article class="metric">
+        <span>Monthly cost</span>
+        <strong>{money(monthlyCost)}</strong>
+        <small>Interest + amortization</small>
+      </article>
+      <article class="metric payoff">
+        <span>Projected payoff</span>
+        <strong>{projectedPayoff}</strong>
+        <small>Based on current settings</small>
+      </article>
+    </div>
+
+    <section class="progress-card">
+      <div class="progress-head"><span>Debt progress</span><strong>{money(paidOff)} paid off</strong></div>
+      <div class="progress-track"><div class="progress-fill" style={`width:${progress}%`}></div></div>
+      <div class="progress-labels"><span>{money(initialBalance)} starting balance</span><span>{progress.toFixed(1)}%</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <div><div class="eyebrow">CURRENT LOANS</div><h2>Loan overview</h2></div>
+        <span class="count">{$loans.length} loans</span>
+      </div>
+      <div class="loan-grid">
+        {#each currentLoans as item}
+          <article class="loan-card">
+            <div class="loan-title"><h3>{item.loan.name || `Loan ${item.index + 1}`}</h3><span>{item.rate.toFixed(2)}%</span></div>
+            <div class="loan-balance">{money(item.balance)}</div>
+            <div class="loan-stats">
+              <div><span>Monthly cost</span><b>{money(item.monthlyCost)}</b></div>
+              <div><span>Amortization</span><b>{money(item.amortization)}</b></div>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
 
     {#if loanData.length > 0}
-      <LoanSumsChart {loanData} />
-      <LoanChart {loanData} />
-      <Table {loanData} {year} {monthName} />
-    {:else}
-      <p>No loan data available.</p>
+      <section class="section charts">
+        <div class="section-heading"><div><div class="eyebrow">TREND</div><h2>Balance & cost projection</h2></div></div>
+        <LoanSumsChart {loanData} />
+        <LoanChart {loanData} />
+      </section>
+
+      <section class="section projection">
+        <div class="section-heading">
+          <div><div class="eyebrow">MONTH BY MONTH</div><h2>Projection table</h2><p>Historical months are included so your actual journey and future projection can be viewed together.</p></div>
+          <button class="history-toggle" type="button" on:click={() => showHistory = !showHistory}>{showHistory ? 'Hide historical rows' : 'Show historical rows'}</button>
+        </div>
+        <div class:hide-history={!showHistory}>
+          <Table {loanData} year={new Date().getFullYear()} monthName={new Date().toLocaleDateString('en-US', {month:'long'})} />
+        </div>
+      </section>
     {/if}
-  </section>
+  </div>
 {/if}
 
 <style lang="scss">
-  section { padding: 20px 32px; background: #fff; border-radius: 8px; margin: 20px 0; }
-  .progress { background: #f3f4f6; height: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; margin-bottom: 2rem; }
-  .progress-bar { height: 100%; background: var(--color-secondary); transition: width .4s ease; }
-  .summary { max-width: 600px; background: white; padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--color-border); margin-bottom: 1rem; }
-  .summary p { margin: .4rem 0; }
-  .error { color: var(--color-error); }
+  .dashboard { max-width: 1180px; margin: 0 auto; padding: 2.25rem 1.5rem 4rem; }
+  .hero { display:flex; justify-content:space-between; gap:2rem; align-items:end; margin-bottom:2rem; }
+  .eyebrow { font-size:.72rem; letter-spacing:.14em; font-weight:800; color:#64748b; margin-bottom:.35rem; }
+  h1 { margin:0; font-size:clamp(2rem,4vw,3.2rem); letter-spacing:-.04em; color:#172033; }
+  .hero p { color:#64748b; margin:.45rem 0 0; max-width:650px; }
+  .manage,.history-toggle { border:1px solid #d9dee8; background:#fff; color:#334155; border-radius:10px; padding:.7rem 1rem; font-weight:700; text-decoration:none; white-space:nowrap; }
+  .metric-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:.85rem; }
+  .metric { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:1.15rem; min-width:0; box-shadow:0 3px 12px rgba(15,23,42,.04); }
+  .metric.featured { background:#172033; color:#fff; border-color:#172033; }
+  .metric span,.metric small { display:block; color:#64748b; font-size:.78rem; }
+  .metric.featured span,.metric.featured small { color:#cbd5e1; }
+  .metric strong { display:block; font-size:1.45rem; margin:.45rem 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .payoff strong { font-size:1.15rem; }
+  .progress-card,.section { background:#fff; border:1px solid #e5e7eb; border-radius:18px; margin-top:1rem; box-shadow:0 3px 12px rgba(15,23,42,.04); }
+  .progress-card { padding:1.25rem 1.4rem; }
+  .progress-head,.progress-labels { display:flex; justify-content:space-between; gap:1rem; font-size:.86rem; }
+  .progress-track { height:10px; border-radius:99px; background:#eef2f7; overflow:hidden; margin:.7rem 0 .4rem; }
+  .progress-fill { height:100%; background:#608d87; border-radius:99px; }
+  .progress-labels { color:#94a3b8; font-size:.72rem; }
+  .section { padding:1.4rem; }
+  .section-heading { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin-bottom:1rem; }
+  h2 { margin:0; color:#172033; font-size:1.45rem; letter-spacing:-.025em; }
+  .section-heading p { color:#64748b; margin:.25rem 0 0; font-size:.9rem; }
+  .count { background:#f1f5f9; color:#64748b; padding:.35rem .65rem; border-radius:999px; font-size:.75rem; }
+  .loan-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.85rem; }
+  .loan-card { border:1px solid #e6eaf0; border-radius:14px; padding:1.1rem; background:#fbfcfe; }
+  .loan-title { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+  .loan-title h3 { margin:0; font-size:1rem; color:#334155; }
+  .loan-title span { font-weight:800; color:#608d87; }
+  .loan-balance { font-size:1.8rem; font-weight:800; letter-spacing:-.03em; color:#172033; margin:1rem 0; }
+  .loan-stats { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid #e6eaf0; padding-top:.8rem; gap:1rem; }
+  .loan-stats span { display:block; color:#94a3b8; font-size:.72rem; }
+  .loan-stats b { color:#334155; font-size:.9rem; }
+  .charts :global(canvas) { max-height:360px; }
+  .projection :global(.table-wrap) { margin:0; }
+  .hide-history :global(tr.previousYear) { display:none; }
+  .error-panel,.empty-state,.loading { margin:2rem auto; max-width:700px; padding:1rem 1.2rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
+  .error-panel { color:#9f1239; }
+  @media (max-width:1050px) { .metric-grid { grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:760px) { .dashboard{padding:1.25rem .8rem 3rem}.hero{align-items:start;flex-direction:column}.metric-grid{grid-template-columns:repeat(2,1fr)}.loan-grid{grid-template-columns:1fr}.section-heading{align-items:start;flex-direction:column}.manage{display:inline-block}.metric strong{font-size:1.25rem} }
+  @media (max-width:430px) { .metric-grid{grid-template-columns:1fr}.progress-labels{font-size:.65rem}.loan-balance{font-size:1.55rem} }
 </style>

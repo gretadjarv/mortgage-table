@@ -57,8 +57,7 @@
     <div class="links">
       <a href={`${base}/loanCalculator`}>Loan Calculator →</a>
       <a href={`${base}/loanCalculator/admin`}>Loan Management →</a>
-      <a href={`${base}/budget`}>Budget →</a>
-    </div>
+          </div>
   </section>
 {/if}
 
@@ -73,7 +72,7 @@
   .link { background:transparent; color:var(--color-link); margin-top:1rem; padding-left:0; }
   .message { color:var(--color-error); }
   .top { display:flex; justify-content:space-between; gap:1rem; align-items:start; }
-  .links { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-top:2rem; }
+  .links { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; margin-top:2rem; }
   .links a { padding:1rem; border:1px solid var(--color-border); border-radius:8px; font-weight:700; }
   @media(max-width:650px){ .links { grid-template-columns:1fr; } .top { flex-direction:column; } }
 </style>
