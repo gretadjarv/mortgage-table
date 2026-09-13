@@ -24,9 +24,9 @@
 
   $: currentRow = loanData.find((row) => row.current) || loanData[loanData.length - 1];
   $: initialBalance = $loans.reduce((sum, loan) => sum + Number(loan.start_sum || 0), 0);
-  // The dashboard balance represents the projected balance after the current
-  // month's scheduled amortization and one-time payments.
-  $: currentBalance = currentRow?.totalRemainingBalance ?? initialBalance;
+  // The dashboard total is based on the same per-loan balances shown in the
+  // loan cards, so a historical balance reset cannot be lost from the total.
+  $: currentBalance = currentLoans?.reduce((sum, item) => sum + Number(item.balance || 0), 0) ?? currentRow?.totalRemainingBalance ?? initialBalance;
   $: balanceMonth = currentRow?.monthYear || 'current projection';
   $: paidOff = Math.max(0, initialBalance - currentBalance);
   $: progress = initialBalance > 0 ? Math.min(100, Math.max(0, paidOff / initialBalance * 100)) : 0;
@@ -44,14 +44,51 @@
   // amortization) and fall back to the most recent row if the current month
   // isn't present.
   $: latestProjectionRow = currentRow || loanData[loanData.length - 1];
-  $: currentLoans = $loans.map((loan, index) => ({
-    loan,
-    index,
-    balance: Number(latestProjectionRow?.remainingBalances?.[index] ?? loan.start_sum ?? 0),
-    rate: Number(latestProjectionRow?.rates?.[index] ?? loan.interest_rate ?? 0),
-    amortization: Number(latestProjectionRow?.effectiveAmortizations?.[index] ?? loan.amortization ?? 0),
-    monthlyCost: Number(latestProjectionRow?.monthlyCosts?.[index] ?? latestProjectionRow?.payments?.[index] ?? 0)
-  }));
+
+  // The overview balance is always taken from the CURRENT projection row.
+  // A historical balance adjustment is an absolute balance reset, so it must
+  // flow into the projection state before any later amortization/payment.
+  // Never use start_sum here once a projection exists.
+  $: todayString = new Date().toISOString().slice(0, 10);
+  $: currentLoans = $loans.map((loan, index) => {
+    const projectedBalance = latestProjectionRow?.remainingBalances?.[index];
+    const projectedRate = latestProjectionRow?.rates?.[index];
+    const projectedAmortization = latestProjectionRow?.recurringAmortizations?.[index];
+    const projectedMonthlyCost = latestProjectionRow?.monthlyCosts?.[index];
+    const latestAdjustment = [...$balanceAdjustments]
+      .filter((item) => item.loan_id === loan.id && String(item.adjustment_date).slice(0, 10) <= todayString)
+      .sort((a, b) => String(a.adjustment_date).localeCompare(String(b.adjustment_date)))
+      .at(-1);
+
+    // A balance adjustment is an actual balance at an exact date. For the
+    // overview, start from that actual figure and apply only payments that
+    // happened after it. This prevents a September 13 balance from being
+    // incorrectly reduced by the whole September projection before September
+    // 13 has even happened.
+    let balance;
+    if (latestAdjustment) {
+      balance = Number(latestAdjustment.balance) || 0;
+      const adjustmentDate = String(latestAdjustment.adjustment_date).slice(0, 10);
+      balance -= $oneTimePayments
+        .filter((payment) => payment.loan_id === loan.id)
+        .filter((payment) => String(payment.payment_date).slice(0, 10) > adjustmentDate && String(payment.payment_date).slice(0, 10) <= todayString)
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+      balance = Math.max(0, balance);
+    } else if (Number.isFinite(Number(projectedBalance))) {
+      balance = Number(projectedBalance);
+    } else {
+      balance = Number(loan.start_sum || 0);
+    }
+
+    return {
+      loan,
+      index,
+      balance,
+      rate: Number.isFinite(Number(projectedRate)) ? Number(projectedRate) : Number(loan.interest_rate || 0),
+      amortization: Number.isFinite(Number(projectedAmortization)) ? Number(projectedAmortization) : Number(loan.amortization || 0),
+      monthlyCost: Number.isFinite(Number(projectedMonthlyCost)) ? Number(projectedMonthlyCost) : 0
+    };
+  });
 
   async function load() {
     if (!supabase) { error = 'Supabase is not configured.'; isLoading = false; return; }
@@ -105,9 +142,9 @@
 
     <div class="metric-grid">
       <article class="metric featured">
-        <span>Total balance</span>
+        <span>Total current balance</span>
         <strong>{money(currentBalance)}</strong>
-        <small>{progress.toFixed(1)}% paid off from starting balance</small>
+        <small>Latest actual balance + payments recorded to today</small>
       </article>
       <article class="metric">
         <span>Weighted interest</span>
@@ -148,12 +185,12 @@
         <div><div class="eyebrow">CURRENT LOANS</div><h2>Loan overview</h2></div>
         <span class="count">{$loans.length} loans</span>
       </div>
-      <div class="snowball-note"><strong>Automatic amortization rollover</strong><span>When a loan is paid off, the same monthly amortization amount continues on the next loan that still has a balance. The receiving loan keeps its own amortization too. Add a payment/rate update for that month if you want to override the automatic amount.</span></div>
+      <div class="snowball-note"><strong>Automatic amortization rollover</strong><span>When a loan is paid off, its recurring monthly amortization moves to the next loan with a balance and stays there every month. The receiving loan keeps its own amortization too. A manual amortization update overrides the automatic total for that loan.</span></div>
       <div class="loan-grid">
         {#each currentLoans as item}
           <article class="loan-card">
             <div class="loan-title"><h3>{item.loan.name || `Loan ${item.index + 1}`}</h3><span>{item.rate.toFixed(2)}%</span></div>
-            <div class="loan-balance">{money(item.balance)}</div>
+            <div class="loan-balance">{money(item.balance)}</div><div class="balance-caption">Latest recorded / paid balance</div>
             <div class="loan-stats">
               <div><span>Monthly cost</span><b>{money(item.monthlyCost)}</b></div>
               <div><span>Amortization</span><b>{money(item.amortization)}</b></div>
@@ -218,6 +255,7 @@
   .loan-title { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
   .loan-title h3 { margin:0; font-size:1rem; color:#334155; }
   .loan-title span { font-weight:800; color:#608d87; }
+  .balance-caption { color:#94a3b8; font-size:.68rem; margin-top:-.8rem; }
   .loan-balance { font-size:1.8rem; font-weight:800; letter-spacing:-.03em; color:#172033; margin:1rem 0; }
   .loan-stats { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid #e6eaf0; padding-top:.8rem; gap:1rem; }
   .loan-stats span { display:block; color:#94a3b8; font-size:.72rem; }
