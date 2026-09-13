@@ -1,0 +1,16 @@
+name = "my-economy"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+main = ".svelte-kit/cloudflare/_worker.js"
+
+[assets]
+directory = ".svelte-kit/cloudflare"
+binding = "ASSETS"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-economy-db"
+database_id = "0bfd61f2-eeb7-4045-8984-c3f6e4d30ad1"  # Production database ID
